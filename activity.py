@@ -1,103 +1,94 @@
-
 import datetime
 import json
-from dateutil import parser
+import os
+import re
+import logging
 
-
-class AcitivyList:
-    def __init__(self, activities):
-        self.activities = activities
-    
-    def initialize_me(self):
-        activity_list = AcitivyList([])
-        with open('activities.json', 'r') as f:
-            data = json.load(f)
-            activity_list = AcitivyList(
-                activities = self.get_activities_from_json(data)
-            )
-        return activity_list
-    
-    def get_activities_from_json(self, data):
-        return_list = []
-        for activity in data['activities']:
-            return_list.append(
-                Activity(
-                    name = activity['name'],
-                    time_entries = self.get_time_entires_from_json(activity),
-                )
-            )
-        self.activities = return_list
-        return return_list
-    
-    def get_time_entires_from_json(self, data):
-        return_list = []
-        for entry in data['time_entries']:
-            return_list.append(
-                TimeEntry(
-                    start_time = parser.parse(entry['start_time']),
-                    end_time = parser.parse(entry['end_time']),
-                    days = entry['days'],
-                    hours = entry['hours'],
-                    minutes = entry['minutes'],
-                    seconds = entry['seconds'],
-                )
-            )
-        self.time_entries = return_list
-        return return_list
-    
-    def serialize(self):
-        return {
-            'activities' : self.activities_to_json()
-        }
-    
-    def activities_to_json(self):
-        activities_ = []
-        for activity in self.activities:
-            activities_.append(activity.serialize())
-        
-        return activities_
-
-
-class Activity:
-    def __init__(self, name, time_entries):
-        self.name = name
-        self.time_entries = time_entries
-
-    def serialize(self):
-        return {
-            'name' : self.name,
-            'time_entries' : self.make_time_entires_to_json()
-        }
-    
-    def make_time_entires_to_json(self):
-        time_list = []
-        for time in self.time_entries:
-            time_list.append(time.serialize())
-        return time_list
-
+def clean_app_name(name):
+    """Clean app name by removing version numbers and extensions"""
+    cleaned_name = re.sub(r'\s*\d+(\.\d+)*\s*', '', name)  # Remove version numbers
+    cleaned_name = re.sub(r'\.(exe|app|dmg|EXE|APP|DMG)$', '', cleaned_name)  # Remove extensions
+    return cleaned_name.strip()
 
 class TimeEntry:
-    def __init__(self, start_time, end_time, days, hours, minutes, seconds):
+    def __init__(self, start_time, end_time):
         self.start_time = start_time
         self.end_time = end_time
-        self.total_time = end_time - start_time
-        self.days = days
-        self.hours = hours
-        self.minutes = minutes
-        self.seconds = seconds
-    
-    def _get_specific_times(self):
-        self.days, self.seconds = self.total_time.days, self.total_time.seconds
-        self.hours = self.days * 24 + self.seconds // 3600
-        self.minutes = (self.seconds % 3600) // 60
-        self.seconds = self.seconds % 60
+        self._calculate_duration()
+
+    def _calculate_duration(self):
+        if isinstance(self.start_time, str):
+            self.start_time = datetime.datetime.fromisoformat(self.start_time)
+        if isinstance(self.end_time, str):
+            self.end_time = datetime.datetime.fromisoformat(self.end_time)
+            
+        time_diff = self.end_time - self.start_time
+        self.duration_seconds = int(time_diff.total_seconds())
+
+    def get_duration_str(self):
+        hours = self.duration_seconds // 3600
+        minutes = (self.duration_seconds % 3600) // 60
+        seconds = self.duration_seconds % 60
+        
+        if hours > 0:
+            return f"{hours}h {minutes}m"
+        elif minutes > 0:
+            return f"{minutes}m"
+        else:
+            return f"{seconds}s"
 
     def serialize(self):
         return {
-            'start_time' : self.start_time.strftime("%Y-%m-%d %H:%M:%S"),
-            'end_time' : self.end_time.strftime("%Y-%m-%d %H:%M:%S"),
-            'days' : self.days,
-            'hours' : self.hours,
-            'minutes' : self.minutes,
-            'seconds' : self.seconds
+            'start_time': self.start_time.isoformat(),
+            'end_time': self.end_time.isoformat(),
+            'duration_seconds': self.duration_seconds
         }
+
+    @classmethod
+    def from_dict(cls, data):
+        entry = cls(
+            start_time=data['start_time'],
+            end_time=data['end_time']
+        )
+        if 'duration_seconds' in data:
+            entry.duration_seconds = data['duration_seconds']
+        return entry
+
+class Activity:
+    def __init__(self, name, time_entries, details=None):
+        self.name = clean_app_name(name)
+        self.time_entries = [TimeEntry(**entry) if isinstance(entry, dict) else entry for entry in time_entries]
+        self.details = details or {}
+        self._calculate_total_time()
+
+    def _calculate_total_time(self):
+        self.total_seconds = sum(entry.duration_seconds for entry in self.time_entries)
+        self.total_time_str = self._format_duration(self.total_seconds)
+
+    def _format_duration(self, seconds):
+        hours = seconds // 3600
+        minutes = (seconds % 3600) // 60
+        
+        if hours > 0:
+            return f"{hours}h {minutes}m"
+        elif minutes > 0:
+            return f"{minutes}m"
+        else:
+            return f"{seconds}s"
+
+    def serialize(self):
+        return {
+            'name': self.name,
+            'time_entries': [entry.serialize() for entry in self.time_entries],
+            'details': self.details,
+            'total_seconds': self.total_seconds,
+            'total_time': self.total_time_str
+        }
+
+    @classmethod
+    def from_dict(cls, data):
+        return cls(
+            name=data['name'],
+            time_entries=[TimeEntry.from_dict(entry) for entry in data['time_entries']],
+            details=data.get('details', {})
+        )
