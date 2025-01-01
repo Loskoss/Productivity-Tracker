@@ -95,6 +95,15 @@ def get_current_activity():
 
 @app.route('/activity/<activity_name>', methods=['GET'])
 def get_activity_details(activity_name):
+    """
+    Return the activity details for the specified activity name.
+
+    Args:
+        activity_name (str): The name of the activity to fetch details for.
+
+    Returns:
+        dict: The activity details, or an error message if the activity is not found.
+    """
     try:
         selected_date = datetime.now().strftime('%Y-%m-%d')  # Default to current date
         activity_details = None
