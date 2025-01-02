@@ -38,7 +38,7 @@ def initialize_tracker():
         tracker = Tracker()
         
         # Start tracking thread as daemon
-        tracking_thread = threading.Thread(target=tracker.start_tracking, daemon=True)
+        tracking_thread = threading.Thread(target=tracker.focus_change_listener, daemon=True)
         tracking_thread.start()
         logging.info('Activity tracking started successfully')
     except Exception as e:
@@ -61,22 +61,20 @@ def index():
 @app.route('/activities', methods=['GET'])
 def get_activities():
     try:
-        selected_date = datetime.now().strftime('%Y-%m-%d')  # Default to current date
+        selected_date = request.args.get('date', datetime.now().strftime('%Y-%m-%d'))  # Get date from query params or default to today
         all_activities = {"date": selected_date, "activities": []}
 
         if sessions_dir.exists():
-            for session_file in sessions_dir.glob('*.json'):
+            session_file = sessions_dir / f"{selected_date}.json"
+            if session_file.exists():
                 with open(session_file, 'r') as f:
                     session_data = json.load(f)
-                    if session_data.get('date') == selected_date:
-                        all_activities["activities"].extend(session_data["activities"])
+                    all_activities["activities"].extend(session_data.get("activities", []))
 
-        logging.info(f"Activities fetched: {json.dumps(all_activities, indent=2)}")
         return jsonify(all_activities)
     except Exception as e:
         logging.error(f"Error reading activities: {str(e)}")
         return jsonify({'error': str(e)}), 500
-
 
 @app.route('/toggle_theme', methods=['POST'])
 def toggle_theme():
@@ -105,18 +103,19 @@ def get_activity_details(activity_name):
         dict: The activity details, or an error message if the activity is not found.
     """
     try:
-        selected_date = datetime.now().strftime('%Y-%m-%d')  # Default to current date
         activity_details = None
 
         if sessions_dir.exists():
             for session_file in sessions_dir.glob('*.json'):
                 with open(session_file, 'r') as f:
                     session_data = json.load(f)
-                    if session_data.get('date') == selected_date:
-                        for activity in session_data.get('activities', []):
-                            if activity.get('name') == activity_name:
-                                activity_details = activity
-                                break
+                    for activity in session_data.get('activities', []):
+                        if activity.get('name') == activity_name:
+                            activity_details = activity
+                            break
+
+                if activity_details:  # Exit early if found
+                    break
 
         if activity_details:
             return jsonify(activity_details)
@@ -125,6 +124,8 @@ def get_activity_details(activity_name):
     except Exception as e:
         logging.error(f"Error fetching activity details for {activity_name}: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+
 
 
 # Register cleanup functions

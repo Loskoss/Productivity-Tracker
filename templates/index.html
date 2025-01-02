@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Productivity Tracker</title>
+    <title>Enhanced Productivity Tracker</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
@@ -86,6 +86,38 @@
             color: var(--text-color);
             border: 1px solid var(--secondary-color);
         }
+
+        .d-none {
+            display: none !important;
+        }
+
+        .scrollable {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        table {
+            background-color: var(--card-bg);
+        }
+
+        th, td {
+            color: var(--text-color);
+        }
+
+        .merge-button {
+            margin-top: 10px;
+            background-color: var(--primary-color);
+            color: var(--background-color);
+            border: none;
+            padding: 5px 10px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .merge-button:hover {
+            background-color: var(--primary-color);
+            opacity: 0.9;
+        }
     </style>
 </head>
 <body>
@@ -99,64 +131,66 @@
             </div>
         </div>
 
-        <!-- Stats Cards -->
-        <div class="row mb-4">
-            <div class="col-md-4">
-                <div class="card stats-card">
-                    <div class="card-body">
-                        <h5 class="card-title">
-                            <i class="fas fa-clock"></i> Total Time Tracked
-                        </h5>
-                        <p class="card-text" id="totalTime">0h 0m</p>
+        <div id="mainView">
+            <div class="row mb-4">
+                <div class="col-md-4">
+                    <div class="card stats-card">
+                        <div class="card-body">
+                            <h5 class="card-title">
+                                <i class="fas fa-clock"></i> Total Time Tracked
+                            </h5>
+                            <p class="card-text" id="totalTime">0h 0m 0s</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card stats-card">
+                        <div class="card-body">
+                            <h5 class="card-title">
+                                <i class="fas fa-list"></i> Active Applications
+                            </h5>
+                            <p class="card-text" id="activeApps">0</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card stats-card">
+                        <div class="card-body">
+                            <h5 class="card-title">
+                                <i class="fas fa-window-maximize"></i> Current App
+                            </h5>
+                            <p class="card-text" id="currentApp">None</p>
+                        </div>
                     </div>
                 </div>
             </div>
-            <div class="col-md-4">
-                <div class="card stats-card">
-                    <div class="card-body">
-                        <h5 class="card-title">
-                            <i class="fas fa-list"></i> Active Applications
-                        </h5>
-                        <p class="card-text" id="activeApps">0</p>
+
+            <div class="card mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <input type="date" id="dateFilter" class="form-control" />
+                        </div>
+                        <div>
+                            <button class="sort-button active" data-sort="time">Most Used</button>
+                            <button class="sort-button" data-sort="name">Name</button>
+                            <button class="sort-button" data-sort="recent">Recent</button>
+                        </div>
                     </div>
                 </div>
             </div>
-            <div class="col-md-4">
-                <div class="card stats-card">
-                    <div class="card-body">
-                        <h5 class="card-title">
-                            <i class="fas fa-window-maximize"></i> Current App
-                        </h5>
-                        <p class="card-text" id="currentApp">None</p>
-                    </div>
-                </div>
+
+            <div class="row" id="activitiesList">
             </div>
         </div>
 
-        <!-- Filters -->
-        <div class="card mb-4">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <input type="date" id="dateFilter" class="form-control" />
-                    </div>
-                    <div>
-                        <button class="sort-button active" data-sort="time">Most Used</button>
-                        <button class="sort-button" data-sort="name">Name</button>
-                        <button class="sort-button" data-sort="recent">Recent</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Activities List -->
-        <div class="row" id="activitiesList">
-            <!-- Activities will be dynamically added here -->
+        <div id="detailsView" class="d-none">
+            <button class="btn btn-primary mb-3" id="backButton">Back</button>
+            <div id="activityDetails" class="scrollable"></div>
         </div>
     </div>
 
     <script>
-        // Theme Toggle
         const themeToggle = document.getElementById('themeToggle');
         let isDarkMode = localStorage.getItem('darkMode') === 'true';
 
@@ -174,11 +208,9 @@
 
         updateTheme();
 
-        // Date Filter
         const dateFilter = document.getElementById('dateFilter');
         dateFilter.valueAsDate = new Date();
 
-        // Sorting
         const sortButtons = document.querySelectorAll('.sort-button');
         let currentSort = 'time';
 
@@ -194,7 +226,32 @@
         function formatDuration(seconds) {
             const hours = Math.floor(seconds / 3600);
             const minutes = Math.floor((seconds % 3600) / 60);
-            return `${hours}h ${minutes}m`;
+            const secs = seconds % 60;
+            return `${hours}h ${minutes}m ${secs}s`;
+        }
+
+        function mergeNearbyTimes(entries, threshold = 30) {
+            const merged = [];
+
+            entries.sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
+
+            let current = entries[0];
+
+            for (let i = 1; i < entries.length; i++) {
+                const next = entries[i];
+                const gap = (new Date(next.start_time) - new Date(current.end_time)) / 1000;
+
+                if (gap <= threshold) {
+                    current.end_time = next.end_time;
+                    current.duration_seconds += next.duration_seconds;
+                } else {
+                    merged.push(current);
+                    current = next;
+                }
+            }
+
+            merged.push(current);
+            return merged;
         }
 
         function createActivityCard(activity) {
@@ -217,16 +274,79 @@
                     </div>
                 </div>
             `;
-        
-            // Open detailed view in a new tab
-            card.querySelector('.card-body').addEventListener('click', () => {
-                window.open(`/activity_details.html?name=${encodeURIComponent(activity.name)}`, '_blank');
+
+            card.addEventListener('click', () => {
+                fetch(`/activity/${encodeURIComponent(activity.name)}`)
+                    .then(response => response.json())
+                    .then(details => {
+                        displayActivityDetails(details);
+                    })
+                    .catch(error => console.error('Error fetching activity details:', error));
             });
-        
+
             return card;
         }
-        
-        
+
+        function displayActivityDetails(details) {
+            const detailsView = document.getElementById('detailsView');
+            const mainView = document.getElementById('mainView');
+
+            mainView.classList.add('d-none');
+            detailsView.classList.remove('d-none');
+
+            const activityDetails = document.getElementById('activityDetails');
+            const mergedEntries = mergeNearbyTimes(details.time_entries);
+
+            activityDetails.innerHTML = `
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">${details.name}</h5>
+                        <p><strong>Total Time:</strong> ${details.total_time}</p>
+                        <p><strong>Window Title:</strong> ${details.details.window_title || 'N/A'}</p>
+                        <button class="merge-button" onclick="toggleMerge()">Toggle Merge Nearby Times</button>
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Start Time</th>
+                                    <th>End Time</th>
+                                    <th>Duration</th>
+                                </tr>
+                            </thead>
+                            <tbody id="timeEntries">
+                                ${renderTableRows(details.time_entries)}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+
+            function renderTableRows(entries) {
+                return entries.map((entry, index) => `
+                    <tr>
+                        <td>${index + 1}</td>
+                        <td>${new Date(entry.start_time).toLocaleString()}</td>
+                        <td>${new Date(entry.end_time).toLocaleString()}</td>
+                        <td>${formatDuration(entry.duration_seconds)}</td>
+                    </tr>
+                `).join('');
+            }
+
+            let showingMerged = false;
+
+            function toggleMerge() {
+                showingMerged = !showingMerged;
+                document.getElementById('timeEntries').innerHTML = renderTableRows(showingMerged ? mergedEntries : details.time_entries);
+            }
+        }
+
+        document.getElementById('backButton').addEventListener('click', () => {
+            const detailsView = document.getElementById('detailsView');
+            const mainView = document.getElementById('mainView');
+
+            mainView.classList.remove('d-none');
+            detailsView.classList.add('d-none');
+        });
 
         function updateActivities() {
             fetch('/activities')
@@ -234,13 +354,11 @@
                 .then(data => {
                     const selectedDate = dateFilter.value;
                     let activities = [];
-        
-                    // Filter activities by selected date
+
                     if (data.date === selectedDate) {
                         activities = data.activities;
                     }
-        
-                    // Sort activities
+
                     switch (currentSort) {
                         case 'time':
                             activities.sort((a, b) => b.total_seconds - a.total_seconds);
@@ -250,26 +368,17 @@
                             break;
                         case 'recent':
                             activities.sort((a, b) => {
-                                const aLatest = new Date(
-                                    a.time_entries[a.time_entries.length - 1].end_time
-                                );
-                                const bLatest = new Date(
-                                    b.time_entries[b.time_entries.length - 1].end_time
-                                );
+                                const aLatest = new Date(a.time_entries[a.time_entries.length - 1].end_time);
+                                const bLatest = new Date(b.time_entries[b.time_entries.length - 1].end_time);
                                 return bLatest - aLatest;
                             });
                             break;
                     }
-        
-                    // Update stats
-                    const totalSeconds = activities.reduce(
-                        (sum, activity) => sum + activity.total_seconds,
-                        0
-                    );
+
+                    const totalSeconds = activities.reduce((sum, activity) => sum + activity.total_seconds, 0);
                     document.getElementById('totalTime').textContent = formatDuration(totalSeconds);
                     document.getElementById('activeApps').textContent = activities.length;
-        
-                    // Update activities list
+
                     const activitiesList = document.getElementById('activitiesList');
                     activitiesList.innerHTML = '';
                     activities.forEach(activity => {
@@ -278,22 +387,19 @@
                 })
                 .catch(error => console.error('Error fetching activities:', error));
         }
-        
 
         function updateCurrentApp() {
             fetch('/current_activity')
                 .then(response => response.json())
                 .then(data => {
                     const currentAppElement = document.getElementById('currentApp');
-                    currentAppElement.textContent = data.current_app ? 
-                        data.current_app.name : 'None';
-                });
+                    currentAppElement.textContent = data.name !== 'No activity' ? data.name : 'None';
+                })
+                .catch(error => console.error('Error fetching current activity:', error));
         }
 
-        // Update on date change
         dateFilter.addEventListener('change', updateActivities);
 
-        // Initial update and periodic refresh
         updateActivities();
         setInterval(updateActivities, 5000);
         setInterval(updateCurrentApp, 1000);
