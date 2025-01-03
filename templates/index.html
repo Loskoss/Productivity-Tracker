@@ -349,16 +349,23 @@
         });
 
         function updateActivities() {
-            fetch('/activities')
-                .then(response => response.json())
+            const selectedDate = dateFilter.value;
+        
+            fetch(`/activities?date=${selectedDate}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
                 .then(data => {
-                    const selectedDate = dateFilter.value;
+                    console.log('Fetched data:', data);
                     let activities = [];
-
-                    if (data.date === selectedDate) {
+        
+                    if (new Date(data.date).toISOString().split('T')[0] === selectedDate) {
                         activities = data.activities;
                     }
-
+        
                     switch (currentSort) {
                         case 'time':
                             activities.sort((a, b) => b.total_seconds - a.total_seconds);
@@ -374,11 +381,11 @@
                             });
                             break;
                     }
-
+        
                     const totalSeconds = activities.reduce((sum, activity) => sum + activity.total_seconds, 0);
                     document.getElementById('totalTime').textContent = formatDuration(totalSeconds);
                     document.getElementById('activeApps').textContent = activities.length;
-
+        
                     const activitiesList = document.getElementById('activitiesList');
                     activitiesList.innerHTML = '';
                     activities.forEach(activity => {
@@ -387,6 +394,7 @@
                 })
                 .catch(error => console.error('Error fetching activities:', error));
         }
+        
 
         function updateCurrentApp() {
             fetch('/current_activity')
