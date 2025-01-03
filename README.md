@@ -29,7 +29,7 @@ To set up the Productivity Tracker on your local machine, follow these steps:
 
 To run the application, execute the following command:  
 <br/>python app.py  
-<br/>Then, open your web browser and navigate to <http://localhost:5000> to access the application.
+<br/>Then, open your web browser and navigate to <http://localhost:5001> to access the application.
 
 ## Contributing
 
